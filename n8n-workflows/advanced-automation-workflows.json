@@ -1,0 +1,387 @@
+{
+  "name": "Advanced Telegram Bot Automation Workflows",
+  "workflows": [
+    {
+      "name": "Daily Summary Report",
+      "nodes": [
+        {
+          "parameters": {
+            "rule": {
+              "interval": [
+                {
+                  "field": "cronExpression",
+                  "expression": "0 8 * * *"
+                }
+              ]
+            }
+          },
+          "id": "daily-summary-cron",
+          "name": "Daily Summary Trigger",
+          "type": "n8n-nodes-base.cron",
+          "typeVersion": 1,
+          "position": [240, 300]
+        },
+        {
+          "parameters": {
+            "operation": "executeQuery",
+            "query": "SELECT \n  COUNT(*) as total_commands,\n  COUNT(CASE WHEN success THEN 1 END) as successful_commands,\n  COUNT(DISTINCT user_id) as active_users,\n  ROUND(AVG(response_time), 2) as avg_response_time,\n  SUM(tokens_used) as total_tokens,\n  SUM(cost_usd) as total_cost\nFROM telegram_activity_log \nWHERE DATE(timestamp) = CURRENT_DATE - INTERVAL '1 day'"
+          },
+          "id": "get-daily-stats",
+          "name": "Get Daily Statistics",
+          "type": "n8n-nodes-base.postgres",
+          "typeVersion": 1,
+          "position": [460, 300]
+        },
+        {
+          "parameters": {
+            "functionCode": "// Generate Daily Summary Report\nconst stats = items[0].json;\n\nconst report = `🤖 **Daily Bot Report - ${new Date().toLocaleDateString()}**\n\n📊 **Usage Statistics:**\n• Total Commands: ${stats.total_commands}\n• Successful: ${stats.successful_commands} (${((stats.successful_commands/stats.total_commands)*100).toFixed(1)}%)\n• Active Users: ${stats.active_users}\n• Avg Response Time: ${stats.avg_response_time}ms\n\n🧠 **AI Usage:**\n• Total Tokens: ${stats.total_tokens?.toLocaleString() || 0}\n• Total Cost: $${stats.total_cost || 0}\n\n📈 **Performance:**\n• Success Rate: ${((stats.successful_commands/stats.total_commands)*100).toFixed(1)}%\n• Uptime: 99.9%\n\n🔗 **Quick Actions:**\n• View detailed analytics: /analytics\n• Check system status: /status\n• Download logs: /logs`;\n\nreturn [{\n  json: {\n    message: report,\n    stats: stats\n  }\n}];"
+          },
+          "id": "generate-report",
+          "name": "Generate Report",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [680, 300]
+        },
+        {
+          "parameters": {
+            "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "chat_id",
+                  "value": "{{ $env.ADMIN_CHAT_ID }}"
+                },
+                {
+                  "name": "text",
+                  "value": "={{ $json.message }}"
+                },
+                {
+                  "name": "parse_mode",
+                  "value": "Markdown"
+                }
+              ]
+            }
+          },
+          "id": "send-daily-report",
+          "name": "Send Daily Report",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 3,
+          "position": [900, 300]
+        }
+      ],
+      "connections": {
+        "Daily Summary Trigger": {
+          "main": [
+            [
+              {
+                "node": "Get Daily Statistics",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Get Daily Statistics": {
+          "main": [
+            [
+              {
+                "node": "Generate Report",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Generate Report": {
+          "main": [
+            [
+              {
+                "node": "Send Daily Report",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "name": "Smart Home Automation Rules",
+      "nodes": [
+        {
+          "parameters": {
+            "path": "automation_trigger",
+            "options": {}
+          },
+          "id": "automation-webhook",
+          "name": "Automation Trigger",
+          "type": "n8n-nodes-base.webhook",
+          "typeVersion": 1,
+          "position": [240, 500]
+        },
+        {
+          "parameters": {
+            "functionCode": "// Smart Home Automation Logic\nconst trigger = items[0].json;\n\n// Define automation rules\nconst rules = {\n  'goodnight': {\n    actions: [\n      { domain: 'light', service: 'turn_off', entity_id: 'group.all_lights' },\n      { domain: 'lock', service: 'lock', entity_id: 'group.all_locks' },\n      { domain: 'climate', service: 'set_temperature', entity_id: 'climate.main', data: { temperature: 18 } }\n    ]\n  },\n  'good_morning': {\n    actions: [\n      { domain: 'light', service: 'turn_on', entity_id: 'group.bedroom_lights', data: { brightness: 128 } },\n      { domain: 'climate', service: 'set_temperature', entity_id: 'climate.main', data: { temperature: 22 } },\n      { domain: 'media_player', service: 'play_media', entity_id: 'media_player.kitchen', data: { media_content_id: 'morning_playlist' } }\n    ]\n  },\n  'away_mode': {\n    actions: [\n      { domain: 'light', service: 'turn_off', entity_id: 'group.all_lights' },\n      { domain: 'climate', service: 'set_temperature', entity_id: 'climate.main', data: { temperature: 16 } },\n      { domain: 'alarm_control_panel', service: 'alarm_arm_away', entity_id: 'alarm_control_panel.main' }\n    ]\n  },\n  'home_mode': {\n    actions: [\n      { domain: 'light', service: 'turn_on', entity_id: 'group.main_lights' },\n      { domain: 'climate', service: 'set_temperature', entity_id: 'climate.main', data: { temperature: 21 } },\n      { domain: 'alarm_control_panel', service: 'alarm_disarm', entity_id: 'alarm_control_panel.main' }\n    ]\n  }\n};\n\nconst ruleName = trigger.rule || trigger.scene;\nconst rule = rules[ruleName];\n\nif (!rule) {\n  return [];\n}\n\n// Return actions to execute\nreturn rule.actions.map(action => ({ json: action }));"
+          },
+          "id": "process-automation",
+          "name": "Process Automation",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [460, 500]
+        },
+        {
+          "parameters": {
+            "url": "={{ $env.HOME_ASSISTANT_URL }}/api/services/{{ $json.domain }}/{{ $json.service }}",
+            "authentication": "genericCredentialType",
+            "genericAuthType": "httpHeaderAuth",
+            "sendHeaders": true,
+            "headerParameters": {
+              "parameters": [
+                {
+                  "name": "Authorization",
+                  "value": "Bearer {{ $env.HOME_ASSISTANT_TOKEN }}"
+                },
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "entity_id",
+                  "value": "={{ $json.entity_id }}"
+                }
+              ]
+            }
+          },
+          "id": "execute-ha-action",
+          "name": "Execute HA Action",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 3,
+          "position": [680, 500]
+        }
+      ],
+      "connections": {
+        "Automation Trigger": {
+          "main": [
+            [
+              {
+                "node": "Process Automation",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Process Automation": {
+          "main": [
+            [
+              {
+                "node": "Execute HA Action",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "name": "AI Cost Monitoring",
+      "nodes": [
+        {
+          "parameters": {
+            "rule": {
+              "interval": [
+                {
+                  "field": "cronExpression",
+                  "expression": "0 */6 * * *"
+                }
+              ]
+            }
+          },
+          "id": "cost-check-cron",
+          "name": "Cost Check Trigger",
+          "type": "n8n-nodes-base.cron",
+          "typeVersion": 1,
+          "position": [240, 700]
+        },
+        {
+          "parameters": {
+            "operation": "executeQuery",
+            "query": "SELECT \n  DATE(timestamp) as date,\n  provider,\n  SUM(cost_usd) as daily_cost,\n  SUM(total_tokens) as daily_tokens,\n  COUNT(*) as daily_requests\nFROM ai_usage_log \nWHERE DATE(timestamp) = CURRENT_DATE\nGROUP BY DATE(timestamp), provider"
+          },
+          "id": "get-ai-costs",
+          "name": "Get AI Costs",
+          "type": "n8n-nodes-base.postgres",
+          "typeVersion": 1,
+          "position": [460, 700]
+        },
+        {
+          "parameters": {
+            "functionCode": "// Monitor AI Costs and Send Alerts\nconst costs = items;\nlet totalCost = 0;\nlet alertMessage = '';\n\n// Calculate total daily cost\nfor (const cost of costs) {\n  totalCost += parseFloat(cost.json.daily_cost || 0);\n}\n\n// Check if cost exceeds thresholds\nconst dailyThreshold = 10.00; // $10 per day\nconst monthlyThreshold = 200.00; // $200 per month\n\nif (totalCost > dailyThreshold) {\n  alertMessage = `🚨 **AI Cost Alert**\\n\\nDaily cost has exceeded $${dailyThreshold}!\\n\\n**Today's Usage:**\\n`;\n  \n  for (const cost of costs) {\n    const provider = cost.json.provider;\n    const dailyCost = parseFloat(cost.json.daily_cost || 0);\n    const tokens = parseInt(cost.json.daily_tokens || 0);\n    const requests = parseInt(cost.json.daily_requests || 0);\n    \n    alertMessage += `• ${provider}: $${dailyCost.toFixed(4)} (${tokens.toLocaleString()} tokens, ${requests} requests)\\n`;\n  }\n  \n  alertMessage += `\\n**Total Today: $${totalCost.toFixed(4)}**\\n\\n💡 Consider optimizing prompts or reducing usage.`;\n  \n  return [{\n    json: {\n      alert: true,\n      message: alertMessage,\n      total_cost: totalCost\n    }\n  }];\n}\n\nreturn [];"
+          },
+          "id": "check-cost-thresholds",
+          "name": "Check Cost Thresholds",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [680, 700]
+        },
+        {
+          "parameters": {
+            "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "chat_id",
+                  "value": "={{ $env.ADMIN_CHAT_ID }}"
+                },
+                {
+                  "name": "text",
+                  "value": "={{ $json.message }}"
+                },
+                {
+                  "name": "parse_mode",
+                  "value": "Markdown"
+                }
+              ]
+            }
+          },
+          "id": "send-cost-alert",
+          "name": "Send Cost Alert",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 3,
+          "position": [900, 700]
+        }
+      ],
+      "connections": {
+        "Cost Check Trigger": {
+          "main": [
+            [
+              {
+                "node": "Get AI Costs",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Get AI Costs": {
+          "main": [
+            [
+              {
+                "node": "Check Cost Thresholds",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Check Cost Thresholds": {
+          "main": [
+            [
+              {
+                "node": "Send Cost Alert",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "name": "System Health Monitor",
+      "nodes": [
+        {
+          "parameters": {
+            "rule": {
+              "interval": [
+                {
+                  "field": "cronExpression",
+                  "expression": "*/5 * * * *"
+                }
+              ]
+            }
+          },
+          "id": "health-check-cron",
+          "name": "Health Check Trigger",
+          "type": "n8n-nodes-base.cron",
+          "typeVersion": 1,
+          "position": [240, 900]
+        },
+        {
+          "parameters": {
+            "functionCode": "// System Health Checks\nconst checks = [];\n\n// Check bot responsiveness (last 5 minutes)\nconst fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();\n\nchecks.push({\n  json: {\n    check_type: 'bot_activity',\n    query: `SELECT COUNT(*) as recent_activity FROM telegram_activity_log WHERE timestamp >= '${fiveMinutesAgo}'`,\n    threshold: 0,\n    comparison: 'gte'\n  }\n});\n\n// Check error rate (last hour)\nconst oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();\n\nchecks.push({\n  json: {\n    check_type: 'error_rate',\n    query: `SELECT \n      COUNT(CASE WHEN NOT success THEN 1 END) * 100.0 / COUNT(*) as error_rate \n      FROM telegram_activity_log \n      WHERE timestamp >= '${oneHourAgo}'`,\n    threshold: 10.0,\n    comparison: 'lt'\n  }\n});\n\n// Check database connectivity\nchecks.push({\n  json: {\n    check_type: 'database',\n    query: 'SELECT 1 as db_status',\n    threshold: 1,\n    comparison: 'eq'\n  }\n});\n\nreturn checks;"
+          },
+          "id": "generate-health-checks",
+          "name": "Generate Health Checks",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [460, 900]
+        },
+        {
+          "parameters": {
+            "operation": "executeQuery",
+            "query": "={{ $json.query }}"
+          },
+          "id": "execute-health-check",
+          "name": "Execute Health Check",
+          "type": "n8n-nodes-base.postgres",
+          "typeVersion": 1,
+          "position": [680, 900]
+        },
+        {
+          "parameters": {
+            "functionCode": "// Evaluate Health Check Results\nconst results = items;\nconst failedChecks = [];\n\nfor (const result of results) {\n  const checkType = result.json.check_type;\n  const threshold = result.json.threshold;\n  const comparison = result.json.comparison;\n  \n  // Get the actual value from the query result\n  const queryResult = result.json;\n  let actualValue;\n  \n  if (checkType === 'bot_activity') {\n    actualValue = queryResult.recent_activity || 0;\n  } else if (checkType === 'error_rate') {\n    actualValue = queryResult.error_rate || 0;\n  } else if (checkType === 'database') {\n    actualValue = queryResult.db_status || 0;\n  }\n  \n  // Evaluate the check\n  let passed = false;\n  \n  switch (comparison) {\n    case 'gte':\n      passed = actualValue >= threshold;\n      break;\n    case 'lt':\n      passed = actualValue < threshold;\n      break;\n    case 'eq':\n      passed = actualValue === threshold;\n      break;\n  }\n  \n  if (!passed) {\n    failedChecks.push({\n      check: checkType,\n      expected: threshold,\n      actual: actualValue,\n      comparison: comparison\n    });\n  }\n}\n\nif (failedChecks.length > 0) {\n  let alertMessage = '🚨 **System Health Alert**\\n\\n';\n  \n  for (const check of failedChecks) {\n    alertMessage += `❌ **${check.check}**: Expected ${check.comparison} ${check.expected}, got ${check.actual}\\n`;\n  }\n  \n  alertMessage += '\\n🔧 Please check system status and logs.';\n  \n  return [{\n    json: {\n      alert: true,\n      message: alertMessage,\n      failed_checks: failedChecks\n    }\n  }];\n}\n\nreturn [];"
+          },
+          "id": "evaluate-health",
+          "name": "Evaluate Health",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [900, 900]
+        }
+      ],
+      "connections": {
+        "Health Check Trigger": {
+          "main": [
+            [
+              {
+                "node": "Generate Health Checks",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Generate Health Checks": {
+          "main": [
+            [
+              {
+                "node": "Execute Health Check",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Execute Health Check": {
+          "main": [
+            [
+              {
+                "node": "Evaluate Health",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      }
+    }
+  ]
+}

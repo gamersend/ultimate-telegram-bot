@@ -1,0 +1,45 @@
+{
+  "name": "Telegram Bot Activity Logger",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "telegram_activity",
+        "options": {}
+      },
+      "id": "webhook-telegram-activity",
+      "name": "Telegram Activity Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "telegram_activity"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process Telegram Bot Activity\nconst activity = items[0].json;\n\n// Log activity to database\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  user_id: activity.user_id,\n  command: activity.command || activity.activity,\n  success: activity.success,\n  metadata: activity.metadata || {},\n  source: 'telegram_bot'\n};\n\n// Add analytics\nif (activity.command) {\n  logEntry.category = 'command';\n} else if (activity.activity) {\n  logEntry.category = 'activity';\n}\n\n// Calculate usage metrics\nlogEntry.response_time = activity.metadata?.duration || 0;\nlogEntry.tokens_used = activity.metadata?.tokens || 0;\nlogEntry.cost_usd = activity.metadata?.cost || 0;\n\nreturn [{\n  json: logEntry\n}];"
+      },
+      "id": "process-activity",
+      "name": "Process Activity",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Telegram Activity Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1"
+}

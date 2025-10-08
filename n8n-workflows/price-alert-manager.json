@@ -1,0 +1,104 @@
+{
+  "name": "Price Alert Manager",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "price_alert",
+        "options": {}
+      },
+      "id": "webhook-price-alert",
+      "name": "Price Alert Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "price_alert"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process Price Alerts\nconst alert = items[0].json;\n\n// Store alert in database\nconst alertData = {\n  user_id: alert.user_id,\n  symbol: alert.symbol.toUpperCase(),\n  target_price: parseFloat(alert.target_price),\n  condition: alert.condition || 'above',\n  created_at: alert.created_at || new Date().toISOString(),\n  active: true,\n  triggered: false\n};\n\nreturn [{\n  json: alertData\n}];"
+      },
+      "id": "process-price-alert",
+      "name": "Process Price Alert",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "price-check-cron",
+      "name": "Price Check Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 500]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Check price alerts\n// This would normally query the database for active alerts\n// and check current prices against target prices\n\nconst mockAlerts = [\n  {\n    user_id: 8170961853,\n    symbol: 'AAPL',\n    target_price: 150,\n    condition: 'above',\n    current_price: 155,\n    triggered: true\n  },\n  {\n    user_id: 8475185811,\n    symbol: 'BTC',\n    target_price: 50000,\n    condition: 'below',\n    current_price: 45000,\n    triggered: true\n  }\n];\n\n// Filter triggered alerts\nconst triggeredAlerts = mockAlerts.filter(alert => alert.triggered);\n\nreturn triggeredAlerts.map(alert => ({ json: alert }));"
+      },
+      "id": "check-price-alerts",
+      "name": "Check Price Alerts",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Send price alert notification\nconst alert = items[0].json;\n\nconst notification = {\n  type: 'price_alert',\n  user_id: alert.user_id,\n  message: `🚨 Price Alert: ${alert.symbol} is ${alert.condition} $${alert.target_price}. Current price: $${alert.current_price}`,\n  symbol: alert.symbol,\n  target_price: alert.target_price,\n  current_price: alert.current_price,\n  condition: alert.condition,\n  timestamp: new Date().toISOString()\n};\n\nreturn [{\n  json: notification\n}];"
+      },
+      "id": "send-price-notification",
+      "name": "Send Price Notification",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [680, 500]
+    }
+  ],
+  "connections": {
+    "Price Alert Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Price Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Price Check Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Price Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Price Alerts": {
+      "main": [
+        [
+          {
+            "node": "Send Price Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1"
+}

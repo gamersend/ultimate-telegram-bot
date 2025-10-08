@@ -1,0 +1,95 @@
+{
+  "name": "AI Usage Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "ai_usage",
+        "options": {}
+      },
+      "id": "webhook-ai-usage",
+      "name": "AI Usage Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "ai_usage"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Monitor AI Usage and Costs\nconst usage = items[0].json;\n\n// Calculate costs based on model and tokens\nconst costPerToken = {\n  'gpt-4': 0.00003,\n  'gpt-3.5-turbo': 0.000002,\n  'claude-3': 0.000015,\n  'local': 0.0\n};\n\nconst model = usage.model || 'gpt-3.5-turbo';\nconst tokens = usage.tokens || 0;\nconst cost = (costPerToken[model] || 0.000002) * tokens;\n\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  user_id: usage.user_id,\n  command: usage.command,\n  model: model,\n  tokens: tokens,\n  cost_usd: cost,\n  response_time: usage.response_time || 0,\n  success: usage.success || false\n};\n\nreturn [{\n  json: logEntry\n}];"
+      },
+      "id": "process-ai-usage",
+      "name": "Process AI Usage",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.cost_usd}}",
+              "operation": "larger",
+              "value2": 0.01
+            }
+          ]
+        }
+      },
+      "id": "cost-threshold-check",
+      "name": "Cost Threshold Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// High cost alert\nconst usage = items[0].json;\n\nconst alert = {\n  type: 'high_cost_alert',\n  message: `High AI usage cost detected: $${usage.cost_usd.toFixed(4)}`,\n  user_id: usage.user_id,\n  model: usage.model,\n  tokens: usage.tokens,\n  cost: usage.cost_usd,\n  timestamp: usage.timestamp\n};\n\nreturn [{\n  json: alert\n}];"
+      },
+      "id": "high-cost-alert",
+      "name": "High Cost Alert",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 200]
+    }
+  ],
+  "connections": {
+    "AI Usage Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process AI Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process AI Usage": {
+      "main": [
+        [
+          {
+            "node": "Cost Threshold Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cost Threshold Check": {
+      "main": [
+        [
+          {
+            "node": "High Cost Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1"
+}

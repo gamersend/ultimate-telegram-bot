@@ -1,0 +1,100 @@
+{
+  "name": "System Health Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/5 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "health-check-cron",
+      "name": "Health Check Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// System Health Check\nconst healthData = {\n  timestamp: new Date().toISOString(),\n  bot_status: 'running',\n  memory_usage: Math.random() * 100,\n  cpu_usage: Math.random() * 50,\n  active_users: Math.floor(Math.random() * 10),\n  commands_per_minute: Math.floor(Math.random() * 20),\n  error_rate: Math.random() * 5,\n  uptime_hours: Math.floor(Math.random() * 168)\n};\n\n// Alert if metrics are concerning\nconst alerts = [];\nif (healthData.memory_usage > 80) alerts.push('High memory usage');\nif (healthData.cpu_usage > 70) alerts.push('High CPU usage');\nif (healthData.error_rate > 10) alerts.push('High error rate');\n\nhealthData.alerts = alerts;\nhealthData.status = alerts.length > 0 ? 'warning' : 'healthy';\n\nreturn [{\n  json: healthData\n}];"
+      },
+      "id": "check-health",
+      "name": "Check Health",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.status}}",
+              "operation": "equal",
+              "value2": "warning"
+            }
+          ]
+        }
+      },
+      "id": "health-status-check",
+      "name": "Health Status Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Send health alert\nconst health = items[0].json;\n\nconst alert = {\n  type: 'health_alert',\n  message: `System health warning: ${health.alerts.join(', ')}`,\n  memory_usage: health.memory_usage,\n  cpu_usage: health.cpu_usage,\n  error_rate: health.error_rate,\n  timestamp: health.timestamp,\n  severity: 'warning'\n};\n\nreturn [{\n  json: alert\n}];"
+      },
+      "id": "send-health-alert",
+      "name": "Send Health Alert",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 200]
+    }
+  ],
+  "connections": {
+    "Health Check Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Health": {
+      "main": [
+        [
+          {
+            "node": "Health Status Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Status Check": {
+      "main": [
+        [
+          {
+            "node": "Send Health Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1"
+}

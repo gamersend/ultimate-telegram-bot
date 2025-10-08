@@ -1,0 +1,407 @@
+{
+  "name": "Ultimate Telegram Bot - Complete Workflow Collection",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "telegram_activity",
+        "options": {}
+      },
+      "id": "webhook-telegram-activity",
+      "name": "Telegram Activity Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "telegram_activity"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process Telegram Bot Activity\nconst activity = items[0].json;\n\n// Log activity to database\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  user_id: activity.user_id,\n  command: activity.command || activity.activity,\n  success: activity.success,\n  metadata: activity.metadata || {},\n  source: 'telegram_bot'\n};\n\n// Add analytics\nif (activity.command) {\n  logEntry.category = 'command';\n} else if (activity.activity) {\n  logEntry.category = 'activity';\n}\n\n// Calculate usage metrics\nlogEntry.response_time = activity.metadata?.duration || 0;\nlogEntry.tokens_used = activity.metadata?.tokens || 0;\nlogEntry.cost_usd = activity.metadata?.cost || 0;\n\nreturn [{\n  json: logEntry\n}];"
+      },
+      "id": "process-activity",
+      "name": "Process Activity",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "telegram_activity_log",
+        "columns": "timestamp,user_id,command,success,metadata,category,response_time,tokens_used,cost_usd",
+        "additionalFields": {}
+      },
+      "id": "log-to-database",
+      "name": "Log to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "smart_home",
+        "options": {}
+      },
+      "id": "webhook-smart-home",
+      "name": "Smart Home Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 500],
+      "webhookId": "smart_home"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process Smart Home Commands\nconst command = items[0].json;\n\n// Route to Home Assistant\nif (command.command && command.entity) {\n  const haCommand = {\n    domain: command.command.split('.')[0],\n    service: command.command.split('.')[1],\n    entity_id: command.entity,\n    service_data: command.value || {}\n  };\n  \n  return [{\n    json: {\n      ...haCommand,\n      source_user: command.user_id || 'telegram_bot',\n      timestamp: new Date().toISOString()\n    }\n  }];\n}\n\nreturn [];"
+      },
+      "id": "process-smart-home",
+      "name": "Process Smart Home",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.HOME_ASSISTANT_URL }}/api/services/{{ $json.domain }}/{{ $json.service }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.HOME_ASSISTANT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "entity_id",
+              "value": "={{ $json.entity_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "call-home-assistant",
+      "name": "Call Home Assistant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "path": "price_alert",
+        "options": {}
+      },
+      "id": "webhook-price-alert",
+      "name": "Price Alert Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 700],
+      "webhookId": "price_alert"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process Price Alerts\nconst alert = items[0].json;\n\n// Store alert in database\nconst alertData = {\n  user_id: alert.user_id,\n  symbol: alert.symbol.toUpperCase(),\n  target_price: parseFloat(alert.target_price),\n  condition: alert.condition || 'above',\n  created_at: alert.created_at || new Date().toISOString(),\n  active: true,\n  triggered: false\n};\n\nreturn [{\n  json: alertData\n}];"
+      },
+      "id": "process-price-alert",
+      "name": "Process Price Alert",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 700]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "price_alerts",
+        "columns": "user_id,symbol,target_price,condition,created_at,active,triggered",
+        "additionalFields": {}
+      },
+      "id": "store-price-alert",
+      "name": "Store Price Alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [680, 700],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/5 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "price-check-cron",
+      "name": "Price Check Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 900]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM price_alerts WHERE active = true AND triggered = false"
+      },
+      "id": "get-active-alerts",
+      "name": "Get Active Alerts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [460, 900],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Check Price Alerts\nconst alerts = items;\nconst triggeredAlerts = [];\n\nfor (const alert of alerts) {\n  const { symbol, target_price, condition, user_id } = alert.json;\n  \n  // This would normally fetch current price from API\n  // For demo, we'll simulate price checking\n  const currentPrice = Math.random() * 1000; // Simulate current price\n  \n  let triggered = false;\n  \n  if (condition === 'above' && currentPrice >= target_price) {\n    triggered = true;\n  } else if (condition === 'below' && currentPrice <= target_price) {\n    triggered = true;\n  }\n  \n  if (triggered) {\n    triggeredAlerts.push({\n      json: {\n        ...alert.json,\n        current_price: currentPrice,\n        triggered_at: new Date().toISOString()\n      }\n    });\n  }\n}\n\nreturn triggeredAlerts;"
+      },
+      "id": "check-prices",
+      "name": "Check Prices",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [680, 900]
+    },
+    {
+      "parameters": {
+        "path": "tesla_command",
+        "options": {}
+      },
+      "id": "webhook-tesla",
+      "name": "Tesla Command Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 1100],
+      "webhookId": "tesla_command"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process Tesla Commands\nconst command = items[0].json;\n\n// Log Tesla command for analytics\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  vehicle_id: command.vehicle_id,\n  command: command.command,\n  result: command.result,\n  user_source: 'telegram_bot'\n};\n\n// You could add additional processing here\n// like sending notifications, updating dashboards, etc.\n\nreturn [{\n  json: logEntry\n}];"
+      },
+      "id": "process-tesla",
+      "name": "Process Tesla Command",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 1100]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "tesla_command_log",
+        "columns": "timestamp,vehicle_id,command,result,user_source",
+        "additionalFields": {}
+      },
+      "id": "log-tesla-command",
+      "name": "Log Tesla Command",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [680, 1100],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "user_activity",
+        "options": {}
+      },
+      "id": "webhook-user-activity",
+      "name": "User Activity Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 1300],
+      "webhookId": "user_activity"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process User Activity for Analytics\nconst activity = items[0].json;\n\n// Create comprehensive activity log\nconst activityLog = {\n  timestamp: activity.timestamp || new Date().toISOString(),\n  user_id: activity.user_id,\n  activity_type: activity.activity,\n  metadata: JSON.stringify(activity.metadata || {}),\n  session_id: activity.session_id || null,\n  ip_address: activity.ip_address || null,\n  user_agent: activity.user_agent || 'telegram_bot'\n};\n\n// Add derived metrics\nactivityLog.hour_of_day = new Date().getHours();\nactivityLog.day_of_week = new Date().getDay();\n\nreturn [{\n  json: activityLog\n}];"
+      },
+      "id": "process-user-activity",
+      "name": "Process User Activity",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 1300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "user_activity_log",
+        "columns": "timestamp,user_id,activity_type,metadata,session_id,ip_address,user_agent,hour_of_day,day_of_week",
+        "additionalFields": {}
+      },
+      "id": "log-user-activity",
+      "name": "Log User Activity",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [680, 1300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Activity Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Activity": {
+      "main": [
+        [
+          {
+            "node": "Log to Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Smart Home Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Smart Home",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Smart Home": {
+      "main": [
+        [
+          {
+            "node": "Call Home Assistant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Price Alert Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Price Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Price Alert": {
+      "main": [
+        [
+          {
+            "node": "Store Price Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Price Check Cron": {
+      "main": [
+        [
+          {
+            "node": "Get Active Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Alerts": {
+      "main": [
+        [
+          {
+            "node": "Check Prices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tesla Command Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Tesla Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Tesla Command": {
+      "main": [
+        [
+          {
+            "node": "Log Tesla Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "User Activity Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process User Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process User Activity": {
+      "main": [
+        [
+          {
+            "node": "Log User Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "1"
+}

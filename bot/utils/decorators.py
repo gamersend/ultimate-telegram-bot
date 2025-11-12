@@ -33,18 +33,23 @@ def authorized_only(func: Callable) -> Callable:
 
 def admin_only(func: Callable) -> Callable:
     """Decorator for admin-only commands."""
-    
+
     @functools.wraps(func)
     async def wrapper(message: Message, *args, **kwargs):
         # For now, admin is the first user in allowed_user_ids
-        admin_id = settings.allowed_user_ids[0] if settings.allowed_user_ids else None
-        
-        if not admin_id or message.from_user.id != admin_id:
+        if not settings.allowed_user_ids:
+            logger.warning("No admin users configured in allowed_user_ids")
+            await message.answer("❌ Admin access is not configured.")
+            return
+
+        admin_id = settings.allowed_user_ids[0]
+
+        if message.from_user.id != admin_id:
             await message.answer("❌ This command is only available to administrators.")
             return
-        
+
         return await func(message, *args, **kwargs)
-    
+
     return wrapper
 
 

@@ -18,8 +18,15 @@ class Base(DeclarativeBase):
 
 
 # Database engine and session
+# Convert database URL to async driver
+database_url = settings.database_url
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+asyncpg://")
+elif database_url.startswith("sqlite://"):
+    database_url = database_url.replace("sqlite://", "sqlite+aiosqlite://")
+
 engine = create_async_engine(
-    settings.database_url.replace("postgresql://", "postgresql+asyncpg://"),
+    database_url,
     echo=settings.debug
 )
 

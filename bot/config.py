@@ -29,8 +29,8 @@ class Settings(BaseSettings):
         return []
     
     # AI Configuration
-    openai_api_key: str = Field("sk-KAIMgP6rzU1aRfxeLV6chA", env="OPENAI_API_KEY")
-    openai_base_url: str = Field("http://192.168.0.150:4000/v1", env="OPENAI_BASE_URL")
+    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
+    openai_base_url: str = Field("https://api.openai.com/v1", env="OPENAI_BASE_URL")
     anthropic_api_key: Optional[str] = Field(None, env="ANTHROPIC_API_KEY")
     
     # Database Configuration
@@ -68,8 +68,8 @@ class Settings(BaseSettings):
     giphy_api_key: Optional[str] = Field(None, env="GIPHY_API_KEY")
 
     # n8n Integration
-    n8n_url: str = Field("http://192.168.0.150:5678", env="N8N_URL")
-    n8n_token: str = Field("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4YTFjYWYwOS0xODg5LTQxZDAtYTY3My00MzVkZjliNmUxMDEiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU5OTIxMTYxfQ.bslOmS0kywILrReGkUMo5x9XtYLT4qMXe6DLTRrmYvU", env="N8N_TOKEN")
+    n8n_url: Optional[str] = Field(None, env="N8N_URL")
+    n8n_token: Optional[str] = Field(None, env="N8N_TOKEN")
     
     # Security
     jwt_secret_key: str = Field("your-secret-key-change-this", env="JWT_SECRET_KEY")
@@ -88,23 +88,12 @@ class Settings(BaseSettings):
     host: str = Field("0.0.0.0", env="HOST")
     port: int = Field(8000, env="PORT")
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        
-        @classmethod
-        def parse_env_var(cls, field_name: str, raw_val: str):
-            if field_name == "allowed_user_ids":
-                # Handle both comma-separated and JSON list formats
-                if raw_val.startswith('[') and raw_val.endswith(']'):
-                    # JSON format
-                    import json
-                    return json.loads(raw_val)
-                else:
-                    # Comma-separated format
-                    return [int(x.strip()) for x in raw_val.split(",") if x.strip()]
-            return cls.json_loads(raw_val)
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False,
+        "extra": "ignore"
+    }
 
 
 # Global settings instance

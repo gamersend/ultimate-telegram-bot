@@ -12,17 +12,22 @@ logger = logging.getLogger(__name__)
 
 class N8nService:
     """Service for interacting with n8n workflow automation."""
-    
+
     def __init__(self):
-        self.base_url = settings.n8n_url.rstrip('/')
+        self.base_url = settings.n8n_url.rstrip('/') if settings.n8n_url else None
         self.token = settings.n8n_token
+        self.enabled = self.base_url is not None and self.token is not None
         self.headers = {
-            "Authorization": f"Bearer {self.token}",
+            "Authorization": f"Bearer {self.token}" if self.token else "",
             "Content-Type": "application/json"
         }
     
     async def trigger_webhook(self, webhook_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Trigger an n8n webhook."""
+        if not self.enabled:
+            logger.warning("n8n service is not configured, skipping webhook trigger")
+            return None
+
         try:
             url = f"{self.base_url}/webhook/{webhook_id}"
             
@@ -40,6 +45,10 @@ class N8nService:
     
     async def execute_workflow(self, workflow_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Execute an n8n workflow."""
+        if not self.enabled:
+            logger.warning("n8n service is not configured, skipping workflow execution")
+            return None
+
         try:
             url = f"{self.base_url}/api/v1/workflows/{workflow_id}/execute"
             
@@ -55,6 +64,10 @@ class N8nService:
     
     async def get_workflows(self) -> List[Dict[str, Any]]:
         """Get list of available workflows."""
+        if not self.enabled:
+            logger.warning("n8n service is not configured")
+            return []
+
         try:
             url = f"{self.base_url}/api/v1/workflows"
             
@@ -70,6 +83,10 @@ class N8nService:
     
     async def get_executions(self, workflow_id: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
         """Get workflow executions."""
+        if not self.enabled:
+            logger.warning("n8n service is not configured")
+            return []
+
         try:
             url = f"{self.base_url}/api/v1/executions"
             params = {"limit": limit}
@@ -137,6 +154,10 @@ class N8nService:
     
     async def create_automation(self, trigger: str, action: str, conditions: Dict[str, Any] = None) -> Optional[str]:
         """Create a new automation workflow."""
+        if not self.enabled:
+            logger.warning("n8n service is not configured")
+            return None
+
         try:
             workflow_data = {
                 "name": f"Telegram Bot Automation - {trigger}",
